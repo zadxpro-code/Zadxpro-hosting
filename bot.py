@@ -391,7 +391,7 @@ async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str
 
         import re as _re
         packages_to_install = []
-        files_list = ud.get("pending_files", files)
+        files_list = ud.get("pending_files", [])
         for fname in files_list:
             fpath = d / fname
             try:
