@@ -24,6 +24,7 @@ logging.basicConfig(format="%(asctime)s | %(levelname)s | %(message)s", level=lo
 log = logging.getLogger(__name__)
 
 ALLOWED_EXT = {".py", ".js", ".sh", ".ts", ".rb"}
+SCRIPT_EXT  = {".py", ".js", ".sh", ".ts", ".rb"}
 
 # ━━━━━━━━━━━━━━━━━━ DESIGN ━━━━━━━━━━━━━━━━━━
 LINE  = "━━━━━━━━━━━━━━━━━━━━"
@@ -263,6 +264,162 @@ async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str
             init_msg = await send_to.reply_text("⠋ *Оғоз...*", parse_mode="Markdown")
             await anim_progress(init_msg, "БОТ СТАРТ ШУДА ИСТОДААСТ", milestones)
             send_to = init_msg
+
+        # ── Аз файл import-ҳоро ёб ва насб кун ──
+        await safe_edit(send_to,
+            f"⚡ *БОТ СТАРТ ШУДА ИСТОДААСТ*\n\n"
+            f"`[████░░░░░░] 40%`\n\n"
+            f"› Вобастагиҳо насб карда мешаванд...",
+            parse_mode="Markdown"
+        )
+
+        # Пакетҳои стандартиро нодида гир
+        STDLIB = {
+            "os","sys","re","io","time","math","json","uuid","copy","enum",
+            "abc","ast","csv","cgi","cmd","code","gzip","html","http","hmac",
+            "hashlib","logging","pathlib","random","shutil","signal","socket",
+            "sqlite3","string","struct","subprocess","tempfile","threading",
+            "traceback","typing","urllib","unittest","unicodedata","zipfile",
+            "datetime","functools","itertools","collections","contextlib",
+            "dataclasses","importlib","inspect","platform","pprint","queue",
+            "secrets","select","stat","textwrap","token","tokenize","warnings",
+            "weakref","xml","xmlrpc","base64","binascii","builtins","calendar",
+            "codecs","compileall","concurrent","configparser","decimal","difflib",
+            "dis","email","encodings","errno","fnmatch","fractions","ftplib",
+            "getopt","getpass","glob","grp","heapq","html","http","idlelib",
+            "imaplib","ipaddress","keyword","lib2to3","linecache","locale",
+            "mailbox","marshal","mimetypes","mmap","multiprocessing","netrc",
+            "numbers","operator","optparse","parser","pickle","pickletools",
+            "pipes","pkgutil","poplib","posix","posixpath","pprint","profile",
+            "pstats","pty","pwd","py_compile","pyclbr","pydoc","readline",
+            "reprlib","rlcompleter","runpy","sched","shelve","site","smtplib",
+            "sndhdr","spwd","ssl","stat","statistics","string","stringprep",
+            "sunau","symtable","sysconfig","syslog","tabnanny","tarfile","telnetlib",
+            "termios","test","timeit","tkinter","tty","turtle","turtledemo",
+            "types","typing","uu","venv","wave","wsgiref","xdrlib","zlib","__future__"
+        }
+
+        # Ному package map
+        IMPORT_MAP = {
+            "telebot":            "pyTelegramBotAPI",
+            "telegram":           "python-telegram-bot",
+            "flask":              "flask",
+            "requests":           "requests",
+            "bs4":                "beautifulsoup4",
+            "PIL":                "Pillow",
+            "cv2":                "opencv-python",
+            "numpy":              "numpy",
+            "pandas":             "pandas",
+            "dotenv":             "python-dotenv",
+            "aiohttp":            "aiohttp",
+            "aiogram":            "aiogram",
+            "sqlalchemy":         "sqlalchemy",
+            "pymongo":            "pymongo",
+            "redis":              "redis",
+            "pydantic":           "pydantic",
+            "httpx":              "httpx",
+            "fastapi":            "fastapi",
+            "uvicorn":            "uvicorn",
+            "starlette":          "starlette",
+            "celery":             "celery",
+            "paramiko":           "paramiko",
+            "cryptography":       "cryptography",
+            "jwt":                "PyJWT",
+            "yaml":               "pyyaml",
+            "toml":               "toml",
+            "dotenv":             "python-dotenv",
+            "pymysql":            "pymysql",
+            "psycopg2":           "psycopg2-binary",
+            "motor":              "motor",
+            "beanie":             "beanie",
+            "tortoise":           "tortoise-orm",
+            "peewee":             "peewee",
+            "apscheduler":        "APScheduler",
+            "schedule":           "schedule",
+            "loguru":             "loguru",
+            "rich":               "rich",
+            "click":              "click",
+            "typer":              "typer",
+            "tqdm":               "tqdm",
+            "colorama":           "colorama",
+            "lxml":               "lxml",
+            "selenium":           "selenium",
+            "playwright":         "playwright",
+            "pytube":             "pytube",
+            "yt_dlp":             "yt-dlp",
+            "pydub":              "pydub",
+            "qrcode":             "qrcode",
+            "barcode":            "python-barcode",
+            "pyqrcode":           "pyqrcode",
+            "imutils":            "imutils",
+            "skimage":            "scikit-image",
+            "sklearn":            "scikit-learn",
+            "scipy":              "scipy",
+            "matplotlib":         "matplotlib",
+            "seaborn":            "seaborn",
+            "plotly":             "plotly",
+            "streamlit":          "streamlit",
+            "gradio":             "gradio",
+            "transformers":       "transformers",
+            "torch":              "torch",
+            "tensorflow":         "tensorflow",
+            "keras":              "keras",
+            "openai":             "openai",
+            "anthropic":          "anthropic",
+            "groq":               "groq",
+            "google":             "google-generativeai",
+            "shazamio":           "shazamio",
+            "instagrapi":         "instagrapi",
+            "tweepy":             "tweepy",
+            "vk_api":             "vk-api",
+            "telethon":           "telethon",
+            "pyrogram":           "pyrogram",
+            "pyaudio":            "pyaudio",
+            "speech_recognition": "SpeechRecognition",
+            "gtts":               "gTTS",
+            "pyttsx3":            "pyttsx3",
+            "translate":          "translate",
+            "deep_translator":    "deep-translator",
+            "googletrans":        "googletrans==4.0.0rc1",
+            "forex_python":       "forex-python",
+            "ccxt":               "ccxt",
+            "pycoingecko":        "pycoingecko",
+            "coinbase":           "coinbase",
+            "stripe":             "stripe",
+            "paypalrestsdk":      "paypalrestsdk",
+        }
+
+        import re as _re
+        packages_to_install = []
+        files_list = ud.get("pending_files", files)
+        for fname in files_list:
+            fpath = d / fname
+            try:
+                content = fpath.read_text(encoding="utf-8", errors="replace")
+                for line in content.splitlines():
+                    line = line.strip()
+                    m1 = _re.match(r'^import\s+([\w]+)', line)
+                    m2 = _re.match(r'^from\s+([\w]+)', line)
+                    mod = (m1 or m2)
+                    if mod:
+                        name = mod.group(1).lower()
+                        orig = (m1 or m2).group(1)
+                        if orig in STDLIB or name in STDLIB:
+                            continue
+                        pkg = IMPORT_MAP.get(orig) or IMPORT_MAP.get(name)
+                        if pkg and pkg not in packages_to_install:
+                            packages_to_install.append(pkg)
+                        elif not pkg and orig not in STDLIB and orig not in packages_to_install:
+                            packages_to_install.append(orig)
+            except Exception:
+                pass
+
+        if packages_to_install:
+            pip_result = subprocess.run(
+                ["pip", "install", "--quiet", "--break-system-packages"] + packages_to_install,
+                capture_output=True, text=True
+            )
+            log.info(f"[{uid}] pip install: {packages_to_install} → {pip_result.returncode}")
 
         # ── Stderr-ро ба файл нависед (хатоҳо пинҳон намешаванд) ──
         log_path = d / "bot_stderr.log"
