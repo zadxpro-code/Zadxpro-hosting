@@ -58,6 +58,16 @@ def user_dir(uid: int) -> Path:
     d.mkdir(exist_ok=True)
     return d
 
+def get_runner(filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    return {
+        ".py": "python3",
+        ".js": "node",
+        ".sh": "bash",
+        ".ts": "ts-node",
+        ".rb": "ruby",
+    }.get(ext, "python3")
+
 async def safe_edit(msg, text, kb=None, parse_mode="Markdown"):
     try:
         await msg.edit_text(text, reply_markup=kb, parse_mode=parse_mode)
@@ -66,20 +76,15 @@ async def safe_edit(msg, text, kb=None, parse_mode="Markdown"):
 
 # ━━━━━━━━━━━━━━━━━━ ANIMATIONS ━━━━━━━━━━━━━━━━━━
 async def anim_loading(msg, label: str, steps=12, delay=0.18):
-    """Spinning loader animation"""
     for i in range(steps):
         frame = ANIM_FRAMES[i % len(ANIM_FRAMES)]
         try:
-            await msg.edit_text(
-                f"{frame} *{label}*",
-                parse_mode="Markdown"
-            )
+            await msg.edit_text(f"{frame} *{label}*", parse_mode="Markdown")
         except BadRequest:
             break
         await asyncio.sleep(delay)
 
 async def anim_progress(msg, label: str, milestones: list[tuple[int,str]], delay=0.6):
-    """Progress bar animation with milestones"""
     for pct, step_text in milestones:
         bar = progress_bar(pct)
         try:
@@ -94,7 +99,6 @@ async def anim_progress(msg, label: str, milestones: list[tuple[int,str]], delay
         await asyncio.sleep(delay)
 
 async def anim_dots(msg, label: str, steps=6, delay=0.4):
-    """Bouncing dots animation"""
     dots_frames = ["●○○", "●●○", "●●●", "○●●", "○○●", "○○○"]
     for i in range(steps):
         try:
@@ -155,6 +159,14 @@ def kb_admin_panel(ctx) -> InlineKeyboardMarkup:
     ])
     return InlineKeyboardMarkup(rows)
 
+def kb_after_start() -> InlineKeyboardMarkup:
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("🛑 Бозмондан", callback_data="menu_stop"),
+         InlineKeyboardButton("📊 Вазъ", callback_data="menu_status")],
+        [InlineKeyboardButton("📋 Лог (хатоҳо)", callback_data="menu_log"),
+         InlineKeyboardButton("🏠 Меню", callback_data="menu_main")],
+    ])
+
 # ━━━━━━━━━━━━━━━━━━ SCREENS ━━━━━━━━━━━━━━━━━━
 def screen_home(uid: int, first_name: str) -> str:
     role = "👑 *ADMIN*" if is_admin(uid) else "👤 *Корбар*"
@@ -195,23 +207,18 @@ def screen_status(uid: int, ud: dict) -> str:
 def screen_files(uid: int, ud: dict) -> str:
     pending = ud.get("pending_files", [])
     uploaded = ud.get("uploaded_files", [])
-    
     text = f"📂 *ФАЙЛҲО*\n{LINE}\n"
-    
     if pending:
         text += f"⏳ *Дар интизор ({len(pending)}):*\n"
         for f in pending:
             text += f"  📄 `{f}`\n"
         text += "\n"
-    
     if uploaded and is_running(uid):
         text += f"✅ *Дар кор ({len(uploaded)}):*\n"
         for f in uploaded:
             text += f"  🟢 `{f}`\n"
-    
     if not pending and not uploaded:
         text += "📭 Ҳеҷ файле нест\n\n📤 Файл фиристед"
-    
     return text
 
 def screen_info(uid: int) -> str:
@@ -238,11 +245,9 @@ def screen_info(uid: int) -> str:
 
 # ━━━━━━━━━━━━━━━━━━ LAUNCH BOT ━━━━━━━━━━━━━━━━━━
 async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str, is_edit=True):
-    """Launch subprocess with progress animation"""
     ud = ctx.user_data
     d  = user_dir(uid)
-    
-    # Progress animation
+
     milestones = [
         (10,  "Файлҳо тайёр карда мешаванд..."),
         (35,  "Муҳит танзим мешавад..."),
@@ -250,7 +255,7 @@ async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str
         (85,  f"Иҷро мешавад: `{cmd}`"),
         (100, "Бот оғоз шуд! ✓"),
     ]
-    
+
     try:
         if is_edit:
             await anim_progress(send_to, "БОТ СТАРТ ШУДА ИСТОДААСТ", milestones)
@@ -259,21 +264,50 @@ async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str
             await anim_progress(init_msg, "БОТ СТАРТ ШУДА ИСТОДААСТ", milestones)
             send_to = init_msg
 
+        # ── Stderr-ро ба файл нависед (хатоҳо пинҳон намешаванд) ──
+        log_path = d / "bot_stderr.log"
+        log_file = open(log_path, "w", encoding="utf-8")
+
         proc = subprocess.Popen(
             cmd.split(),
             cwd=str(d),
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=log_file,
         )
         running[uid] = proc
         ud["running_cmd"] = cmd
+        ud["log_path"] = str(log_path)
         files = ud.get("pending_files", [])
         ud["uploaded_files"] = files
         ud.pop("pending_files", None)
         ud.pop("waiting_for_cmd", None)
-        
+
+        # ── 2 сония интизор — агар бот фавран мирад хаторо нишон деҳ ──
+        await asyncio.sleep(2)
+        log_file.flush()
+
+        if proc.poll() is not None:
+            # Бот старт нашуд / фавран мурд
+            running.pop(uid, None)
+            log_file.close()
+            try:
+                error_text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+                error_short = error_text[-900:] if len(error_text) > 900 else error_text
+                if not error_short.strip():
+                    error_short = "Лог холӣ аст — эҳтимол python3/node ёфт нашуд"
+            except Exception:
+                error_short = "Лог хонда нашуд"
+
+            await safe_edit(send_to,
+                f"❌ *БОТ СТАРТ НАШУД!*\n"
+                f"{LINE}\n"
+                f"📋 Хато:\n```\n{error_short}\n```",
+                kb_back_main()
+            )
+            return
+
         log.info(f"[{uid}] launched: {cmd}")
-        
+
         pending_files = "\n".join(f"  ✦ `{f}`" for f in files) if files else "  —"
         final_text = (
             f"🚀 *БОТ СТАРТ ШУД!*\n"
@@ -284,13 +318,8 @@ async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str
             f"{SLINE}\n"
             f"🛑 Барои бозмондан тугмаро пахш кунед"
         )
-        kb = InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛑 Бозмондан", callback_data="menu_stop"),
-             InlineKeyboardButton("📊 Вазъ", callback_data="menu_status")],
-            [InlineKeyboardButton("🏠 Меню", callback_data="menu_main")],
-        ])
-        await asyncio.sleep(0.5)
-        await safe_edit(send_to, final_text, kb)
+        await asyncio.sleep(0.3)
+        await safe_edit(send_to, final_text, kb_after_start())
 
     except FileNotFoundError:
         await safe_edit(send_to,
@@ -301,10 +330,7 @@ async def launch_bot(send_to, ctx: ContextTypes.DEFAULT_TYPE, uid: int, cmd: str
         )
     except Exception as e:
         log.error(f"[{uid}] launch error: {e}")
-        await safe_edit(send_to,
-            f"❌ *Хато:*\n`{e}`",
-            kb_back_main()
-        )
+        await safe_edit(send_to, f"❌ *Хато:*\n`{e}`", kb_back_main())
 
 # ━━━━━━━━━━━━━━━━━━ /start ━━━━━━━━━━━━━━━━━━
 async def cmd_start(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
@@ -324,7 +350,6 @@ async def on_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     filename = doc.file_name or "bot.py"
     ext = Path(filename).suffix.lower()
 
-    # Blocked non-admin with running bot
     if not is_admin(uid) and is_running(uid):
         kb = InlineKeyboardMarkup([
             [InlineKeyboardButton("🛑 Бозмондан", callback_data="menu_stop"),
@@ -340,7 +365,6 @@ async def on_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Extension check
     if ext not in ALLOWED_EXT:
         await update.message.reply_text(
             f"❌ *Файл қабул нашуд!*\n"
@@ -353,16 +377,13 @@ async def on_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    # Downloading animation
     msg = await update.message.reply_text("⠋ *Файл бор карда мешавад...*", parse_mode="Markdown")
     await anim_loading(msg, "Боркунӣ", steps=8, delay=0.15)
 
-    # Save file
     tg_file = await ctx.bot.get_file(doc.file_id)
     save_path = user_dir(uid) / filename
     await tg_file.download_to_drive(save_path)
 
-    # Track pending
     pending: list = ctx.user_data.setdefault("pending_files", [])
     if filename not in pending:
         pending.append(filename)
@@ -389,7 +410,7 @@ async def on_file(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             kb_confirm_start()
         )
 
-# ━━━━━━━━━━━━━━━━━━ TEXT (start command input) ━━━━━━━━━━━━━━━━━━
+# ━━━━━━━━━━━━━━━━━━ TEXT ━━━━━━━━━━━━━━━━━━
 async def on_text(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     ud  = ctx.user_data
     uid = update.effective_user.id
@@ -470,6 +491,31 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
                 kb_back_main()
             )
 
+    # ── Menu: Log ── (НАВИ — хатоҳоро нишон медиҳад)
+    elif data == "menu_log":
+        log_path = ud.get("log_path")
+        if not log_path:
+            await safe_edit(q.message,
+                f"📋 *ЛОГ*\n{LINE}\nЛог ёфт нашуд.",
+                kb_back_main()
+            )
+            return
+        try:
+            text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+            last = text[-800:] if len(text) > 800 else text
+            if not last.strip():
+                last = "Лог ҳоло холӣ аст (бот тоза старт шуд)"
+        except Exception:
+            last = "Лог хонда нашуд"
+        kb = InlineKeyboardMarkup([
+            [InlineKeyboardButton("🔄 Янгила", callback_data="menu_log"),
+             InlineKeyboardButton("🏠 Меню", callback_data="menu_main")],
+        ])
+        await safe_edit(q.message,
+            f"📋 *ЛОГ (охирин 800 символ)*\n{LINE}\n```\n{last}\n```",
+            kb
+        )
+
     # ── Stop confirmed ──
     elif data == "stop_yes":
         msg = q.message
@@ -478,6 +524,7 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         ud.pop("running_cmd", None)
         ud.pop("uploaded_files", None)
         ud.pop("pending_files", None)
+        ud.pop("log_path", None)
         shutil.rmtree(user_dir(uid), ignore_errors=True)
         await asyncio.sleep(0.3)
         await safe_edit(msg,
@@ -539,20 +586,19 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
             await safe_edit(q.message, "❌ Ҳеҷ файле нест!", kb_back_main())
             return
         if len(files) == 1:
-            await launch_bot(q.message, ctx, uid, f"python {files[0]}", is_edit=True)
+            runner = get_runner(files[0])
+            await launch_bot(q.message, ctx, uid, f"{runner} {files[0]}", is_edit=True)
         else:
-            # Ask for start command — show file buttons
             ud["waiting_for_cmd"] = True
             flist = "\n".join(f"  ✦ `{f}`" for f in files)
-            # Quick-pick buttons
-            rows = [[InlineKeyboardButton(f"▶️ python {f}", callback_data=f"quickcmd_python {f}")] for f in files]
+            rows = [[InlineKeyboardButton(f"▶️ {get_runner(f)} {f}", callback_data=f"quickcmd_{get_runner(f)} {f}")] for f in files]
             rows.append([InlineKeyboardButton("🗑 Бекор кун", callback_data="cancel_upload")])
             await safe_edit(q.message,
                 f"⌨️ *START COMMAND*\n"
                 f"{LINE}\n"
                 f"📂 Файлҳо ({len(files)}):\n{flist}\n\n"
                 f"Поёнро пахш кунед ё дастӣ нависед:\n"
-                f"Мисол: `python main.py`",
+                f"Мисол: `python3 main.py`",
                 InlineKeyboardMarkup(rows)
             )
 
@@ -566,7 +612,8 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif data == "confirm_yes":
         files = ud.get("pending_files", [])
         if files:
-            await launch_bot(q.message, ctx, uid, f"python {files[0]}", is_edit=True)
+            runner = get_runner(files[0])
+            await launch_bot(q.message, ctx, uid, f"{runner} {files[0]}", is_edit=True)
         else:
             await safe_edit(q.message, "❌ Файл ёфт нашуд!", kb_back_main())
 
@@ -574,6 +621,7 @@ async def on_callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
     elif data == "confirm_no" or data == "cancel_upload":
         ud.pop("pending_files", None)
         ud.pop("waiting_for_cmd", None)
+        ud.pop("log_path", None)
         shutil.rmtree(user_dir(uid), ignore_errors=True)
         await safe_edit(q.message,
             f"🗑 *Бекор шуд*\n{LINE}\n"
