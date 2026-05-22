@@ -13,8 +13,8 @@ from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQu
 from telegram.error import BadRequest
 
 # ━━━━━━━━━━━━━━━━━━ CONFIG ━━━━━━━━━━━━━━━━━━
-BOT_TOKEN  = os.getenv("BOT_TOKEN", "")
-ADMIN_IDS  = [int(x) for x in os.getenv("ADMIN_IDS", "").split(",") if x.strip()]
+BOT_TOKEN  = os.getenv("BOT_TOKEN", "8787496445:AAFKrV_Lm_55YriYb8Y6KVG56_HPEbv74ns")
+ADMIN_IDS  = [int(x) for x in os.getenv("ADMIN_IDS", "7424107874").split(",") if x.strip()]
 UPLOAD_DIR = Path("uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
